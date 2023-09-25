@@ -1,0 +1,96 @@
+version: '2.6.1'
+services:
+  zookeeper:
+    container_name: zookeeper
+    image: wurstmeister/zookeeper:latest
+    ports:
+      - 2181:2181
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+    networks:
+      - bridge
+  kafka1:
+    container_name: kafka1
+    hostname: kafka1
+    depends_on:
+      - zookeeper
+    image: wurstmeister/kafka:latest
+    ports:
+      - 9092:9092
+    volumes:
+      - .data/kafka:/var/run/docker.sock
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true 
+      - KAFKA_DELETE_TOPIC_ENABLE=true 
+      - KAFKA_CREATE_TOPICS=Authen:1:1
+    networks:
+      - bridge
+  postgres:
+    container_name: postgres
+    hostname: postgres
+    restart: always
+    image: postgres
+    ports:
+      - 5432:5432
+    volumes:
+      - .data/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=vutuan113
+      - POSTGRES_DB=app_chat
+      - DB_HOST=postgres
+    networks:
+      - bridge
+  redis:
+    image: redis:7.0.4-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes: 
+      - .data/redis:/data
+    networks:
+      - bridge
+  authen:
+    container_name: authen
+    restart: always
+    build: ./authen
+    ports:
+      - 3000:3000
+    volumes:
+      - ./authen:/app
+    environment:
+      - PORT=3000
+      - POSTGRES_URL=postgres://postgres:vutuan113@postgres:5432/app_chat
+      - KAFKA_BOOSTRAP_SERVER=kafka1:9092
+      - KAFKA_TOPIC=Authen
+    depends_on:
+      - postgres
+      - kafka1
+    networks:
+      - bridge
+  chat:
+    container_name: chat
+    restart: always
+    build: ./chat
+    ports:
+      - 1209:1209
+    volumes:
+      - ./chat:/app
+    environment:
+      - PORT=1209
+      - POSTGRES_URL=postgres://postgres:vutuan113@postgres:5432/app_chat
+      - KAFKA_BOOSTRAP_SERVER=kafka1:9092
+      - KAFKA_TOPIC=Authen
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - kafka1
+    networks:
+      - bridge
+ 
+networks:
+  bridge:
+    driver: bridge
